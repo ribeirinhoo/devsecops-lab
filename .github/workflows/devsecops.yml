@@ -1,0 +1,65 @@
+name: DevSecOps Lab
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      # 🔍 SAST
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/owasp-top-ten"
+        env:
+          SEMGREP_FAIL_ON: "high"
+
+      # 📦 Instalar Trivy
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install wget -y
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.0_Linux-64bit.deb
+
+      # 🔍 SCA
+      - name: Dependency Scan
+        run: trivy fs . --exit-code 1 --severity HIGH,CRITICAL
+
+      # 🐳 Build
+      - name: Build Docker Image
+        run: docker build -t devsecops-lab .
+
+      # 🔐 Container Scan
+      - name: Image Scan
+        run: trivy image --exit-code 1 --severity HIGH,CRITICAL devsecops-lab
+
+      # 🚀 Rodar container
+      - name: Run Container
+        run: |
+          docker run -d -p 3000:3000 --name app devsecops-lab
+          sleep 15
+
+      # 🌐 DAST
+      - name: ZAP Scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:3000'
+          fail_action: true
+
+      - name: Stop container
+        run: docker stop app && docker rm app
