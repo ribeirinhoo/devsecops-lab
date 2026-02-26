@@ -6,7 +6,7 @@ app.use(express.json());
 
 // VULNERABILIDADE: eval com input do usuário
 app.post('/calc', (req, res) => {
-    const result = eval(req.body.expression);
+	const result = Number(req.body.expression);
     res.json({ result });
 });
 
